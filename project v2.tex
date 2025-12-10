@@ -12,6 +12,11 @@
 \usepackage{hyperref}       % For clickable links in PDF
 \usepackage{float}          % To force image positioning with [H]
 \usepackage{caption}        % For better caption spacing
+\usepackage{hyperref}
+\usepackage{tocloft}
+\renewcommand{\cftdot}{}
+
+
 
 % --- Formatting ---
 \geometry{hmargin=2.5cm,vmargin=2.5cm}
@@ -38,14 +43,14 @@
 \newpage
 
 % -------------------------------------------------------------------
-\section{Business Case}
+\section{Introduction}
 
-\subsection{Context and Motivation}
+\subsection{Context}
 Portfolio hedging remains one of the most critical challenges in quantitative finance. Traders and asset managers must constantly manage portfolios of derivatives whose values fluctuate based on multiple risk factors, such as the underlying asset price ($S_t$), volatility ($\sigma$), and time to maturity.
 
 Traditionally, hedging relies on analytical closed-form solutions like the Black-Scholes model \cite{Hull}. However, these models rely on strong assumptions (constant volatility, frictionless markets) that rarely hold in reality. When market conditions deviate from these theoretical assumptions, or when payoffs become complex, analytical hedging becomes inaccurate \cite{DeepHedging}. This discrepancy motivates our shift towards \textbf{Machine Learning (ML)} methods to learn hedging strategies directly from data.
 
-\subsection{Objective of the Project}
+\subsection{Objectives}
 Our goal is not simply to predict the price of an option, but to develop a model capable of:
 \begin{itemize}
     \item Estimating the optimal hedge ratio ($H_t$).
@@ -55,22 +60,20 @@ Our goal is not simply to predict the price of an option, but to develop a model
 
 We trained our strategy on data generated via Monte Carlo simulations to capture realistic market dynamics.
 
-\subsection{Link to our Field of Specialization}
+\subsection{Link to our specialization}
 As engineering students majoring in Financial Engineering, this project bridges the gap between theory and practice. It directly applies concepts from:
 \begin{itemize}
-    \item \textbf{Stochastic Modeling:} Simulating underlying assets and volatility paths.
     \item \textbf{Derivatives Pricing:} Understanding the non-linear behavior of options.
     \item \textbf{Risk Management:} Controlling Greeks (Delta, Gamma, Vega).
     \item \textbf{Machine Learning:} Applying regression and optimization techniques to financial time series.
 \end{itemize}
 
 % -------------------------------------------------------------------
-\section{Dataset Description}
+\section{Dataset description}
 
 \subsection{Source of the Data}
 To ensure we had full control over the data generation process, we created a synthetic dataset using \textbf{Monte Carlo simulations} implemented in Python \cite{Glasserman}. This allowed us to generate 10,000 paths including:
 \begin{itemize}
-    \item Underlying price paths following Geometric Brownian Motion.
     \item Stochastic volatility components.
     \item Corresponding option prices and their analytical Greeks (Delta, Gamma, Vega).
     \item The target variable: the optimal hedge ratio derived from numerical optimization.
@@ -88,12 +91,10 @@ The resulting dataset is tabular, where each row represents a time step $t$ in a
         $S_t$ & Underlying price at time $t$ \\
         $r_t$ & Risk-free rate \\
         $T_{min}, T_{max}, T_{mean}$ & Maturity statistics of the options in the portfolio \\
-        $\sigma_{i,t}$ & Instantaneous volatility \\
+        $\sigma$ & Instantaneous volatility \\
         $\Delta_{i,t}, \Gamma_{i,t}, \nu_{i,t}$ & Portfolio Greeks (Delta, Gamma, Vega) \\
-        $\Delta_{i}, \Gamma_{i}, \nu_{i}$ & Option Greeks (Delta, Gamma, Vega) \\
-        $x_i$ & Optimal position on Option $i$ \\
-        {$H_t$} & Target: Hedge Ratio \\
-        {$V_t$} & Portfolio Value \\
+        $\Delta_{i}, \Gamma_{i}, \nu_{i}$ & Option Greeks for each option i (Delta, Gamma, Vega) \\
+        {$x_1$,...,$x_n$} & Target: Optimal positions \\
         \bottomrule
     \end{tabular}
     \caption{Dataset features generated via Monte Carlo simulation.}
@@ -101,24 +102,25 @@ The resulting dataset is tabular, where each row represents a time step $t$ in a
 \end{table}
 
 % -------------------------------------------------------------------
-\section{Data Exploration}
+\section{Data exploration}
 
-\subsection{Summary Statistics}
+\subsection{Statistics}
 Visual inspection of the simulated paths confirms that our data exhibits realistic financial characteristics. As shown in Figure \ref{fig:path}, the portfolio value follows a stochastic process consistent with market behavior.
 
+ %mettre image de visualisation
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{images/path_plot.png} 
+    \includegraphics[width=0.8\textwidth]{new_hist.png} 
     \caption{Example of simulated portfolio value path.}
     \label{fig:path}
 \end{figure}
 
-\subsection{Correlation Analysis}
-A crucial step was analyzing the correlation between our input features and the target variable (Hedge Ratio). The correlation matrix (Figure \ref{fig:corr}) reveals that while the hedge ratio is correlated with the portfolio Delta, there are significant non-linear dependencies with Gamma and Volatility. This observation strongly suggests that linear models will be insufficient for this task.
+\subsection{Correlation Matrix}
+A crucial step was analyzing the correlation between our input features and the target variable (Hedge Ratio). The correlation matrix (Figure \ref{fig:corr}) reveals that while the hedge ratio is correlated with the portfolio Delta, there are significant non-linear dependencies with Gamma and Vega. This observation strongly suggests that linear models will be insufficient for this task.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.8\textwidth]{images/correlation_matrix.png}
+    \includegraphics[width=0.8\textwidth]{correlation_matrix.png}
     \caption{Correlation matrix of dataset features.}
     \label{fig:corr}
 \end{figure}
@@ -130,53 +132,135 @@ A crucial step was analyzing the correlation between our input features and the 
 We formulated the hedging problem as an optimization task where we seek a hedge ratio $H_t$ that minimizes the Greeks exposure:
 
 \begin{equation}
-    \min_{H} \left( \alpha \Delta_{total}^2 + \beta \Gamma_{total}^2 + \gamma \nu_{total}^2 \right)
+    \min_{H} \left( \alpha \Delta_{total}^2 + \beta \Gamma_{total}^2 \right)
 \end{equation}
 
 Subject to constraints:
 \[
-|\Delta| \le \Delta_{max}, \quad |\Gamma| \le \Gamma_{max}, \quad |\nu| \le \nu_{max}
+|\Delta| \le \Delta_{max}, \quad |\Gamma| \le \Gamma_{max}
 \]
 
-\subsection{Machine Learning Framework}
+\subsection{Solution}
 Instead of solving this optimization problem at every step (which is computationally expensive), we treat it as a \textbf{Supervised Learning} problem \cite{Bishop}. We train a model $f_{\theta}$ to approximate the optimal hedge:
 \[
 H_t \approx f_{\theta}(S_t, \sigma_t, \Delta_t, \Gamma_t, \nu_t, \dots)
 \]
-We experimented with three distinct modeling approaches: Linear Regression, Non-Linear Regression, and an Ensemble Hybrid Model.
+We experimented with three distinct modeling approaches: Linear Regression, Non-Linear Regression.
 
 % -------------------------------------------------------------------
 \section{Models}
 
-\subsection{Baseline: Multiple Linear Regression}
+\subsection{Multiple Linear Regression}
 We started with a simple Multiple Linear Regression to establish a baseline. The model attempts to predict $H_t$ as a weighted sum of inputs:
 \[ H_t = w_0 + w_1 S_t + w_2 \sigma_t + \dots \]
 \textbf{Verdict:} While interpretable and fast, this model performed poorly. It completely failed to capture the convexity of the options (Gamma effects) and the interactions between volatility and price.
 
-\subsection{Multiple Non-Linear Regression}
-To address the limitations of the linear baseline, we implemented non-linear tree-based models (specifically Gradient Boosting).
-\textbf{Verdict:} This approach significantly improved performance. Tree-based models naturally handle non-linear interactions and are robust to outliers. However, single models still showed high variance in "far-from-the-money" regions.
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{regression_lineaire.png}
+    \caption{Application Linear Regression : Comparaison of actual values and predicted values.}
+    \label{fig:corr}
+\end{figure}
 
-\subsection{GridSearch and Hybrid Model (Ensemble)}
-To achieve the best possible robustness, we implemented an \textbf{Ensemble Learning} strategy. We did not rely on a single algorithm; instead:
+\subsection{Multiple Non-Linear Regression}
+
+Since a simple linear model was clearly not flexible enough, we moved on to several non-linear approaches. The idea is still the same, find a function \(f(x)\) that best predicts \(y\), but each model captures non-linearity in its own way:
+
+\[
+\theta^{\star}
+= \arg\min_{\theta}
+\sum_{i=1}^{n} \left( y_i - f(x_i;\theta) \right)^2.
+\]
+
+\begin{itemize}
+    \item \textbf{Polynomial Regression:}  
+    We start by expanding the original features into polynomial terms.  
+    This is a simple trick that allows the model to learn curved relationships.  
+    It works surprisingly well at low degrees, but can quickly become unstable when the feature space explodes.
+
+    \item \textbf{Kernel Ridge Regression:}  
+    Here, we use a kernel (such as RBF) to let the model “bend” the data into a higher-dimensional space.  
+    The result is a smooth non-linear predictor that stays well-behaved thanks to the L2 regularization.
+
+    \item \textbf{Support Vector Regression (SVR):}  
+    SVR also relies on kernels, but with a different philosophy: it tries to fit the data while ignoring small errors inside an \(\varepsilon\)-tube.  
+    This makes it naturally robust to noise and often very effective, although computationally heavier.
+
+    \item \textbf{Neural Network (MLP):}  
+    Finally, the MLP brings the flexibility of neural networks.  
+    With multiple layers and non-linear activations, it can learn quite complex patterns — sometimes the most complex ones.  
+    However, this comes at the cost of careful tuning and a higher sensitivity to the amount of data.
+\end{itemize}
+
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{regression_non_lineaire.png}
+    \caption{Application MLP : Comparaison of actual values and predicted values.}
+    \label{fig:corr}
+\end{figure}
+
+\textbf{Verdict:}  
+Switching to non-linear models clearly improved the overall predictions.  
+Kernel-based models (Kernel Ridge and SVR) gave smooth, stable results, while the MLP was able to capture more intricate relationships in the data. Polynomial regression also helped, but only up to a certain complexity.  
+
+Despite these improvements, we still observed higher variability in regions where the data is sparse. For example, far-from-the-money zones. This is expected: when the model has fewer examples to learn from, uncertainty naturally increases.
+
+
+\subsection{GridSearch}
+
+After tuning each model independently, we wanted to build something more reliable than any single algorithm. 
+Instead of trying to pick “the best” model, we chose to combine several of them. The idea behind this is simple: 
+each model makes mistakes in different places, and averaging their predictions can smooth out these weaknesses.
+
+Our approach had two steps:
+
 \begin{enumerate}
-    \item \textbf{Hyperparameter Tuning:} We used \texttt{GridSearchCV} with cross-validation to optimize distinct models independently, specifically Support Vector Regressors (SVR) and Multi-Layer Perceptrons (MLP).
-    \item \textbf{Ensembling:} We created a "Voting Regressor" that averages the predictions of these optimized models.
+    \item \textbf{Hyperparameter Tuning:}  
+    Using \texttt{GridSearchCV} with cross-validation, we optimized all our non-linear models separately  
+    (Polynomial Regression, Kernel Ridge, SVR, and MLP).  
+    This ensured that each model was performing at its best before being combined.
+
+    \item \textbf{Ensembling:}  
+    We then built a small hybrid model by averaging the predictions of the four tuned models.  
+    This acts like a “soft voting” regressor: instead of relying on a single opinion, we take the consensus of several predictors.
 \end{enumerate}
-\textbf{Verdict:} This "Hybrid" approach provided the superior results. By averaging the errors of different algorithms, the ensemble model smoothed out the noise inherent in the Monte Carlo simulations and provided the most stable hedge ratios.
+
+\textbf{Verdict:}  
+This hybrid ensemble turned out to be the most stable and the most accurate approach.  
+By blending different algorithms, we reduced variance and smoothed out the noise inherent in the underlying data.  
+The result was a more robust predictor, especially in regions where individual models tended to disagree.
 
 % -------------------------------------------------------------------
-\section{Obstacles and Solutions}
+\section{Obstacles}
 
 Throughout the project, we faced several implementation challenges:
 
-\subsection{Overfitting}
-Our initial Neural Network models tended to "memorize" the noise in the Monte Carlo paths rather than learning the underlying hedging function.
-\textbf{Solution:} We implemented regularization techniques, including \textbf{Dropout} layers and \textbf{L2 regularization}, and used \textbf{Early Stopping} during training to prevent the model from learning noise.
+\subsection{Overfitting and Underfitting Analysis}
 
-\subsection{Underfitting}
-As noted, the linear regression model underfit the data significantly.
-\textbf{Solution:} This confirmed the necessity of using high-capacity non-linear models like Gradient Boosting and Neural Networks.
+To assess the reliability of each model, we compared its performance on the training set and on the test set.  
+By looking at the differences in MSE and \(R^2\), we were able to quickly identify whether a model was overfitting or underfitting.
+
+\textbf{Overfitting.}  
+Some models performed extremely well on the training data but lost accuracy on the test samples.  
+This behaviour large gaps between train and test metrics suggests that the model is memorizing noise rather than learning the true structure of the hedging function.  
+Whenever this happened, GridSearchCV helped us tune the hyperparameters to reduce variance, and the final ensemble approach further smoothed out these overly optimistic models.
+
+\textbf{Underfitting.}  
+Conversely, certain models showed low \(R^2\) scores on both training and test sets.  
+These models failed to capture the non-linear complexity of the problem from the start.  
+Linear regression or shallow polynomial models fell into this category, confirming that the underlying mapping requires richer non-linear methods.
+
+\textbf{Summary.}  
+This train–test evaluation framework allowed us to classify each model along the underfitting–overfitting spectrum and guided the choice of more flexible regressors.  
+Ultimately, combining several well-tuned models in a hybrid ensemble offered the most balanced solution.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{overfitting_underfitting.png}
+    \caption{Code : Overfitting and Underfitting detection.}
+    \label{fig:corr}
+\end{figure}
 
 \subsection{Data Imbalance}
 Financial data is often imbalanced; extreme events (tails) are rare. Our dataset had fewer samples for deep in-the-money or out-of-the-money options.
@@ -186,27 +270,34 @@ Financial data is often imbalanced; extreme events (tails) are rare. Our dataset
 \section{Results Comparison}
 
 \subsection{Performance Metrics}
-We evaluated our models based on:
+    We evaluated our models based on two standard regression metrics:
+
 \begin{itemize}
-    \item \textbf{MSE (Mean Squared Error)} of the hedge ratio.
-    \item \textbf{Constraint Violations:} The frequency with which the predicted hedge resulted in Greeks exceeding the limits.
+    \item \textbf{MSE (Mean Squared Error):} Measures the average squared difference between the predicted and actual hedge ratios.  
+    Lower values indicate more accurate predictions.
+    \item \textbf{\(R^2\) (Coefficient of Determination):} Indicates the proportion of variance in the hedge ratio explained by the model.  
+    Values closer to 1 show better fit to the data.
 \end{itemize}
 
+
 \subsection{Summary of Results}
-Table \ref{tab:results} summarizes the performance of our three approaches. The Hybrid/Ensemble model clearly dominates.
+Table \ref{tab:results} summarizes the performance of our best models on the test set.  
+The Hybrid/Ensemble approach consistently outperforms individual models, achieving the lowest error and the most stable predictions.
 
 \begin{table}[H]
     \centering
     \begin{tabular}{lccc}
         \toprule
-        \textbf{Model} & \textbf{MSE} & \textbf{Constraint Violations} & \textbf{Overall Rank} \\
+        \textbf{Model} & \textbf{MSE} & \textbf{R\textsuperscript{2}} & \textbf{Overall Rank} \\
         \midrule
-        Multiple Linear Regression & High & Medium & Poor \\
-        Multiple Non-Linear Regression & Low & Few & Good \\
-        \textbf{GridSearch Hybrid (Ensemble)} & \textbf{Lowest} & \textbf{Rare} & \textbf{Best} \\
+        Polynomial Regression & 0.1014 & 0.8984 & Moderate \\
+        Kernel Ridge Regression & 0.0663 & 0.9338 & Good \\
+        Support Vector Regression (SVR) & 0.0666 & 0.9337 & Good \\
+        Multi-Layer Perceptron (Grid) & 0.0501 & 0.9499 & Very Good \\
+        \textbf{Hybrid / Ensemble} & \textbf{Lowest} & \textbf{Highest} & \textbf{Best} \\
         \bottomrule
     \end{tabular}
-    \caption{Model comparison based on hedging performance.}
+    \caption{Comparison of model performance on the test set. The Hybrid model combines multiple predictors to achieve the most stable and accurate hedge.}
     \label{tab:results}
 \end{table}
 
@@ -215,6 +306,9 @@ Table \ref{tab:results} summarizes the performance of our three approaches. The 
 This project successfully demonstrated that machine learning can automate portfolio hedging under complex Greek constraints. While linear models are insufficient for derivatives, \textbf{non-linear models optimized via GridSearch and combined into an Ensemble} provide a robust solution.
 
 The Hybrid model achieved the lowest tracking error and best adherence to risk limits. Future improvements could focus on \textbf{Reinforcement Learning (Deep Hedging)}, which would allow the agent to optimize the hedging strategy dynamically over time rather than correcting it instantaneously at each step.
+
+\section{Github}
+\href{https://github.com/TeoBourscheidt/Machine_learning.git}{Our Github}
 
 % -------------------------------------------------------------------
 \begin{thebibliography}{9}
